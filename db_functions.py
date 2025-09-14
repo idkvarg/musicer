@@ -111,9 +111,9 @@ def get_all_tracks_for_backup(start_index=0, db_name="music.db"):
     c = conn.cursor()
     c.execute('''
         SELECT spotify_track_id, telegram_audio_id FROM track_info 
-        WHERE telegram_audio_id IS NOT NULL AND s3_status = 0
+        WHERE telegram_audio_id IS NOT NULL AND s3_status = 0 AND (telegram_channel_id IS NULL OR telegram_channel_id != ?)
         ORDER BY spotify_track_id
-    ''')
+    ''', (SP11_CHANNEL_ID,))
     results = c.fetchall()
     conn.close()
     
