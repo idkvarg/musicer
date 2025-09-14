@@ -1,6 +1,9 @@
 # run the script with:
 # nohup python3 backup.py > backup_nohup.log 2>&1 &
 
+# rotate backup_nohup.log with logrotate:
+# logrotate -s logrotate.state ./logrotate.conf
+
 from my_imports import * # imports db_functions too
 
 import asyncio
@@ -14,28 +17,48 @@ import boto3
 from io import BytesIO
 import logging
 
-# Logging configuration
-# Only log to file, not to stdout/stderr to avoid mixing with print() outputs
+from FastTelethon import download_file as fast_download_file, upload_file as fast_upload_file
+
+# Configuration for resume functionality
+# To resume from a specific point, change START_INDEX to the last processed index + 1
+# Example: if the script stopped at index 150, set START_INDEX = 151
+# Check the logs for "index:XXX" to find where to resume
+START_INDEX = 175968  # Change this to resume from a specific index
+
+
+# Fuseau horaire Tehran (+03:30)
+tehran_offset = 3.5 * 3600  # en secondes
+
+def tehran_time(*args):
+    return time.gmtime(time.time() + tehran_offset)
+
+from logging.handlers import RotatingFileHandler
+
+# Configure logging with rotation (approximately 30k lines)
+# Each line is roughly 100-150 chars, so 4.5MB ≈ 30k lines
+log_handler = RotatingFileHandler(
+    "backup.log", 
+    maxBytes=4.5*1024*1024,  # 4.5MB (approximately 30k lines)
+    backupCount=1  # Keep only 1 backup file
+)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    handlers=[
-        logging.FileHandler('backup.log')
-    ]
+    handlers=[log_handler],
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
 )
+
+logging.Formatter.converter = tehran_time
+
 logger = logging.getLogger(__name__)
+
 
 # Configuration
 BOT_TOKEN = os.environ["SPOT_SEEK_BOT_API"]
 API_ID = os.environ.get('DEVELOPER_TELEGRAM_APP_API_ID')
 API_HASH = os.environ.get('DEVELOPER_TELEGRAM_APP_API_HASH')
 PHONE_NUMBER = os.environ.get('DEVELOPER_TELEGRAM_PHONE_NUMBER')
-
-# Configuration for resume functionality
-# To resume from a specific point, change START_INDEX to the last processed index + 1
-# Example: if the script stopped at index 150, set START_INDEX = 151
-# Check the logs for "index:XXX" to find where to resume
-START_INDEX = 7748  # Change this to resume from a specific index
 
 # warp socks proxy
 warp_proxies = os.environ["WARP_PROXIES"]
@@ -73,7 +96,8 @@ class TelegramDownloader:
         
     async def init_client(self):
         """Initialise le client Telethon"""
-        self.client = TelegramClient('developer_account', API_ID, API_HASH, proxy=warp_proxy)
+        # self.client = TelegramClient('developer_account', API_ID, API_HASH, proxy=warp_proxy) # with warp
+        self.client = TelegramClient('developer_account', API_ID, API_HASH) # without warp
         await self.client.start(phone=PHONE_NUMBER)
         print("Client Telethon initialisé")
     
@@ -186,10 +210,14 @@ class TelegramDownloader:
                     print(f"Upload vers S3 en cours: {s3_key}")
                     
                     # Télécharge le fichier en mémoire
+                    print("before download file via telethon")
                     audio_bytes = BytesIO()
-                    await self.client.download_media(message.audio, audio_bytes)
+                    # await self.client.download_media(message.audio, audio_bytes) # original version
+                    await fast_download_file(self.client, message.audio, audio_bytes, progress_callback=None) # fastTelethon version
                     audio_bytes.seek(0)
+                    print("after download file via telethon")
                     
+                    print("before upload to s3")
                     # Upload vers S3
                     self.s3_client.put_object(
                         Bucket=S3_BUCKET_NAME,
@@ -197,6 +225,7 @@ class TelegramDownloader:
                         Body=audio_bytes.getvalue(),
                         ContentType='audio/mpeg'
                     )
+                    print("after upload to s3")
                     
                     print(f"Fichier uploadé vers S3: s3://{S3_BUCKET_NAME}/{s3_key}")
                     uploaded_files.append((s3_key, track_id))
