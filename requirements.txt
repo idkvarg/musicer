@@ -12,3 +12,6 @@ boto3
 telethon
 asyncio
 cryptg
+flask
+fastapi
+uvicorn
