@@ -19,11 +19,16 @@ import logging
 
 from FastTelethon import download_file as fast_download_file, upload_file as fast_upload_file
 
-# Configuration for resume functionality
-# To resume from a specific point, change START_INDEX to the last processed index + 1
-# Example: if the script stopped at index 150, set START_INDEX = 151
-# Check the logs for "index:XXX" to find where to resume
-START_INDEX = 175968  # Change this to resume from a specific index
+# # Configuration for resume functionality
+# # To resume from a specific point, change START_INDEX to the last processed index + 1
+# # Example: if the script stopped at index 150, set START_INDEX = 151
+# # Check the logs for "index:XXX" to find where to resume
+# START_INDEX = 175968  # Change this to resume from a specific index
+
+START_LETTERS = "1XJU"
+START_INDEX = get_start_index_by_letters(START_LETTERS)
+print(f"START_INDEX: {START_INDEX}")
+time.sleep(5)
 
 
 # Fuseau horaire Tehran (+03:30)
