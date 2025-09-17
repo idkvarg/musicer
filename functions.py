@@ -1,5 +1,5 @@
-import subprocess
 from variables import *
+import subprocess
 import requests
 from log import *
 import shutil
