@@ -17,3 +17,4 @@ backup.log
 backup_nohup.log
 developer_account.session
 developer_account.session-journal
+uvicorn.spotseek.pid
