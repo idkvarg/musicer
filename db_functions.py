@@ -1,33 +1,6 @@
 from variables import *
 import sqlite3 # to use sqlite3 database
 
-# Migrate existing database to new structure
-def migrate_database(db_name="music.db"):
-    """
-    Migrate existing database to add new columns without losing data.
-    """
-    conn = sqlite3.connect(db_name)
-    c = conn.cursor()
-    
-    # Check if new columns exist, if not add them
-    try:
-        c.execute("ALTER TABLE track_info ADD COLUMN telegram_channel_id INTEGER")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    try:
-        c.execute("ALTER TABLE track_info ADD COLUMN message_id INTEGER")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    try:
-        c.execute("ALTER TABLE track_info ADD COLUMN s3_status INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    conn.commit()
-    conn.close()
-
 # Create a SQLite database and table
 def create_database(db_name="music.db"):
     conn = sqlite3.connect(db_name)
@@ -134,3 +107,27 @@ def get_total_tracks_count(db_name="music.db"):
     result = c.fetchone()
     conn.close()
     return result[0] if result else 0
+
+def get_start_index_by_letters(first_letters, db_name="music.db"):
+    """
+    Calculate start index based on first letters of track_id.
+    Returns the index of the first track starting with those letters,
+    or the index of the first track that comes after alphabetically if no exact match.
+    """
+    conn = sqlite3.connect(db_name)
+    c = conn.cursor()
+    c.execute('''
+        SELECT spotify_track_id FROM track_info 
+        WHERE telegram_audio_id IS NOT NULL AND s3_status = 0 AND (telegram_channel_id IS NULL OR telegram_channel_id != ?)
+        ORDER BY spotify_track_id
+    ''', (SP11_CHANNEL_ID,))
+    results = c.fetchall()
+    conn.close()
+    
+    # Find the first track that starts with the given letters or comes after
+    for i, (track_id,) in enumerate(results):
+        if track_id >= first_letters:
+            return i
+    
+    # If no track found, return the total count (end of list)
+    return len(results)
