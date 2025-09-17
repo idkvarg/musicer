@@ -1,10 +1,10 @@
+from variables import *
 import re
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import requests # for get_redirect_link
 import random
 from spotipy_anon import SpotifyAnon
-from variables import *
 from db_functions import get_telegram_audio_id
 from log import *
 import time
