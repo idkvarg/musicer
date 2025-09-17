@@ -1,8 +1,5 @@
 from my_imports import *
-from db_functions import *
 from spotify import get_track_image
-from functions import *
-import random
 
 def list_of_files_in_a_folder(folder_path):
     try:
@@ -54,17 +51,16 @@ def read_list_from_file(file_path):
 
 def download_tracks(track_ids_list):
     try:
+        global current_proxy_index
         global queue_handler_sleep_timer
         log(f"sleep timer: {queue_handler_sleep_timer}")
         time.sleep(queue_handler_sleep_timer)  # dynamic delay for yt-dlp
 
-        global current_proxy_index
     
-        # # fixme
-        # # experimental - to see if has effect on spotdl rate limits - debug
-        # delete_spotdl_cache()
-        # # experimental again - yt-dlp cache
-        # delete_yt_dlp_cache()
+        # experimental - to see if has effect on spotdl rate limits - debug
+        delete_spotdl_cache()
+        # experimental again - yt-dlp cache
+        delete_yt_dlp_cache()
 
         # remove files and folders in directory
         clear_files(directory)
@@ -83,12 +79,6 @@ def download_tracks(track_ids_list):
             log("all tracks already exist in db. skip.")
             return "allTracksExistInDb"
 
-
-
-
-        # debug
-        current_proxy = socks_proxies[current_proxy_index]
-
         log(f"current_proxy_index: {current_proxy_index}\n\ntracks to download:\n\n{"\n".join(track_ids_list)}")
 
         # Kill any existing spotdl processes before starting a new download
@@ -99,14 +89,11 @@ def download_tracks(track_ids_list):
 
         try:       
             print("start downloading tracks via spotdl")
-            # download with proxychains and warp
-            # command = ['proxychains4', '-f', proxychains4_config_file, '../spotdl', "--bitrate", "320k", "--output", "{track-id}/", "download"]
-            
+
             # experimental - pass spotify api key to spotdl
             # random spotify app from list to avoid rate limiting
             random.seed(time.time())
             spotify_app = random.choice(spotify_apps_list)
-            print(spotify_app) # debug
             spotify_client_id = spotify_app[0]
             spotify_client_secret = spotify_app[1]
 
@@ -116,17 +103,15 @@ def download_tracks(track_ids_list):
                     #    "--client-id", spotify_client_id, "--client-secret", spotify_client_secret,
                        "--bitrate", "320k",
                     #    "--yt-dlp-args", "--config-location ../yt-dlp.conf",
-                       "--yt-dlp-args", f"--proxy {current_proxy}", #fixme credentials
+                       "--yt-dlp-args", f"--proxy {socks_proxies[current_proxy_index]}",
                        "--output", "{track-id}/",
                        "download"
                        ]
             
             for track_id in track_ids_list:
                 command.append(f"https://open.spotify.com/track/{track_id}")
-            
-            print("download command:", " ".join(command)) # debug
             # download in a subprocess with a timeout (does it in ouput folder)
-            subprocess.run(command, cwd=directory, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+            subprocess.run(command, cwd=directory, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
         except Exception as e:
             log(bot_name + " error in spotdl download")
             return "errorInSpotdlDownload"
@@ -163,20 +148,43 @@ def download_tracks(track_ids_list):
                 # change cover image
                 change_cover_image(mp3_file, "cover.jpg", track_folder_path)
                 # check file size because of telegram 50MB limit
-                audio = open(track_folder_path + mp3_file, 'rb')
+                audio_path = os.path.join(track_folder_path, mp3_file)
+                audio = open(audio_path, 'rb')
                 file_size = os.fstat(audio.fileno()).st_size
                 if file_size > 50_000_000:
                     log(bot_name + " log:\n🛑 too big mp3 file error")
+                    audio.close()
                     continue
                 # get track metadata to be shown in telegram
-                track_duration = get_track_duration(track_folder_path + mp3_file)
-                track_artist = get_artist_name_from_track(track_folder_path + mp3_file)
-                track_title = get_track_title(track_folder_path + mp3_file)
+                track_duration = get_track_duration(audio_path)
+                track_artist = get_artist_name_from_track(audio_path)
+                track_title = get_track_title(audio_path)
                 thumb_image = open(track_folder_path + "cover_low.jpg", 'rb')
                 # send audio to database_channel:
-                audio_message = bot.send_audio(database_channel, audio, thumb=thumb_image, caption=bot_username, duration=track_duration, performer=track_artist, title=track_title)
+                audio_message = bot.send_audio(SP11_CHANNEL_ID, audio, thumb=thumb_image, caption=track_id, duration=track_duration, performer=track_artist, title=track_title)
                 # add file to database - new method based on sqlite3 db
-                add_or_update_track_info(track_id, audio_message.audio.file_id)
+                # add_or_update_track_info(track_id, audio_message.audio.file_id) # before new db functions system of backup
+                add_or_update_track_info(track_id, audio_message.audio.file_id, SP11_CHANNEL_ID, audio_message.message_id) # after new db functions system of backup
+                # upload to s3
+                s3_key = f"{track_id}.mp3"
+                s3_client = boto3.client(
+                    's3',
+                    endpoint_url=S3_ENDPOINT,
+                    aws_access_key_id=S3_ACCESS_KEY,
+                    aws_secret_access_key=S3_SECRET_KEY
+                )
+                # Upload the actual audio file to S3
+                with open(audio_path, 'rb') as audio_file:
+                    s3_client.put_object(
+                        Bucket=S3_BUCKET_NAME,
+                        Key=s3_key,
+                        Body=audio_file,
+                        ContentType='audio/mpeg'
+                    )
+                audio.close()
+                thumb_image.close()
+                # now that it's uploaded, set s3 status to true in database
+                update_s3_status(track_id, 1)
                 
                 at_least_one_track_downloaded = True
         except Exception as e:
