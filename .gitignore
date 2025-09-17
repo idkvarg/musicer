@@ -22,3 +22,7 @@ uvicorn.spotseek.pid
 # log files
 *.log
 *.log.*
+
+# temporary files
+logrotate.state
+logrotate.conf
