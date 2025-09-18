@@ -1,3 +1,6 @@
+# simple run:
+# python3 -m uvicorn spotseek:app --host 127.0.0.1 --port 3006
+
 from my_imports import *
 from bot_handlers import register_handlers
 
@@ -14,7 +17,7 @@ register_handlers(bot)
 async def telegram_webhook(request: Request):
     data = await request.json()
     update = types.Update.de_json(data)
-    # Traiter l'update en arrière-plan pour répondre 200 OK immédiatement
+    # Process update in background to respond 200 OK immediately
     asyncio.create_task(bot.process_new_updates([update]))
     return Response(status_code=200, content="OK")
 
@@ -25,7 +28,7 @@ async def on_startup():
     await asyncio.sleep(5)
     await bot.remove_webhook()
     # Set new webhook
-    # drop_pending_updates=True pour éviter l'accumulation en cas de redémarrage
+    # drop_pending_updates=True to avoid accumulation on restart
     await asyncio.sleep(5)
     await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
     print("Webhook set to:", WEBHOOK_URL)
