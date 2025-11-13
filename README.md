@@ -1,4 +1,5 @@
 # telegram spotify downloader bot: [@SpotSeekBot](https://t.me/SpotSeekBot)
+**This project is for personal learning, do not use it for illegal purposes. Artists can send their copyright claims to the developer. All rights remain to rightful copyright owners.**
 
 ## how to use as the client
 Send bot a link from spotify and it'll download it for you.
@@ -107,7 +108,7 @@ add this text to crontab (change with the path you've cloned repository):
 `YT-DLP`: probabely the ip is banned by youtube. change it to another.
 
 ## disclaimer
-This project is for personal learning, do not use it for illegal purposes. Artists can send their copyright claims to the developer.
+**This project is for personal learning, do not use it for illegal purposes. Artists can send their copyright claims to the developer. All rights remain to rightful copyright owners.**
 
 ## support and donate
 ### Give me energy with coffee:
